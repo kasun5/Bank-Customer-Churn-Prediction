@@ -1,0 +1,631 @@
+################################################################################
+# Bank Customer Churn Prediction
+# 
+# Author: [Your Name]
+# Date: February 2026
+# Description: End-to-end machine learning pipeline for predicting customer 
+#              churn using logistic regression with multiple sampling techniques
+################################################################################
+
+# =============================================================================
+# 1. ENVIRONMENT SETUP
+# =============================================================================
+
+# Required packages
+required_packages <- c(
+  "dplyr",        # Data manipulation
+  "ggplot2",      # Visualization
+  "patchwork",    # Combining plots
+  "here",         # File path management
+  "caret",        # ML utilities
+  "caTools",      # Train/test split
+  "smotefamily",  # SMOTE implementation
+  "ggcorrplot",   # Correlation visualization
+  "tibble",       # Modern data frames
+  "pROC",         # ROC curve and AUC calculation
+  "scales"        # Additional plot utilities
+)
+
+# Install missing packages
+install_if_missing <- function(packages) {
+  new_packages <- packages[!(packages %in% installed.packages()[,"Package"])]
+  if(length(new_packages)) install.packages(new_packages)
+}
+
+install_if_missing(required_packages)
+
+# Load libraries
+invisible(lapply(required_packages, library, character.only = TRUE))
+
+# Set random seed for reproducibility
+set.seed(123)
+
+# Create output directories
+dir.create("plots", showWarnings = FALSE, recursive = TRUE)
+dir.create("models", showWarnings = FALSE, recursive = TRUE)
+dir.create("results", showWarnings = FALSE, recursive = TRUE)
+
+
+# =============================================================================
+# 2. DATA LOADING AND INITIAL PREPROCESSING
+# =============================================================================
+
+message("Loading data...")
+
+# Load data
+data_path <- here("data", "Bank_Customer_Churn_Data.csv")
+
+if (!file.exists(data_path)) {
+  stop("Data file not found. Please ensure 'Bank_Customer_Churn_Data.csv' is in the 'data' folder.")
+}
+
+bank_raw <- read.csv(data_path, stringsAsFactors = FALSE)
+
+message(sprintf("Data loaded: %d rows, %d columns", nrow(bank_raw), ncol(bank_raw)))
+
+# Initial data exploration
+cat("\n--- Initial Data Structure ---\n")
+str(bank_raw)
+
+cat("\n--- Missing Values Summary ---\n")
+missing_summary <- colSums(is.na(bank_raw))
+print(missing_summary[missing_summary > 0])
+
+if (sum(missing_summary) == 0) {
+  message("✓ No missing values detected.")
+}
+
+
+# =============================================================================
+# 3. DATA CLEANING AND TYPE CONVERSION
+# =============================================================================
+
+message("\nCleaning and preprocessing data...")
+
+# Remove customer_id (non-predictive identifier)
+bank_raw <- bank_raw %>% 
+  select(-customer_id)
+
+# Convert target variable to factor
+bank_raw$churn <- factor(bank_raw$churn, levels = c(0, 1), labels = c("No", "Yes"))
+
+# Convert categorical variables to factors
+bank_raw <- bank_raw %>%
+  mutate(
+    products_number = as.factor(products_number),
+    credit_card = as.factor(credit_card),
+    active_member = as.factor(active_member)
+  )
+
+# Display class distribution
+cat("\n--- Target Variable Distribution ---\n")
+churn_table <- table(bank_raw$churn)
+churn_prop <- prop.table(churn_table) * 100
+print(churn_table)
+cat(sprintf("Churn Rate: %.2f%% (imbalanced dataset)\n", churn_prop["Yes"]))
+
+# Identify numeric and categorical columns
+numeric_columns <- bank_raw %>%
+  select(where(is.numeric)) %>%
+  colnames()
+
+categorical_columns <- bank_raw %>%
+  select(where(~ is.factor(.x) | is.character(.x))) %>%
+  colnames()
+
+# Remove target from categorical columns for plotting
+categorical_columns <- setdiff(categorical_columns, "churn")
+
+
+# =============================================================================
+# 4. EXPLORATORY DATA ANALYSIS
+# =============================================================================
+
+message("\nGenerating EDA visualizations...")
+
+# --- 4.1 Numeric Variable Distributions ---
+hist_list <- lapply(numeric_columns, function(col) {
+  ggplot(bank_raw, aes(x = .data[[col]])) +
+    geom_histogram(fill = "steelblue", color = "white", bins = 30, alpha = 0.8) +
+    labs(
+      title = paste("Distribution of", gsub("_", " ", tools::toTitleCase(col))),
+      x = gsub("_", " ", tools::toTitleCase(col)),
+      y = "Frequency"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold", size = 11),
+      axis.title = element_text(size = 10)
+    )
+})
+
+hist_grid <- wrap_plots(hist_list, ncol = 3) +
+  plot_annotation(
+    title = "Distribution of Numeric Features",
+    theme = theme(plot.title = element_text(face = "bold", size = 14, hjust = 0.5))
+  )
+
+# --- 4.2 Numeric Variables by Churn Status ---
+boxplot_list <- lapply(numeric_columns, function(col) {
+  ggplot(bank_raw, aes(x = churn, y = .data[[col]], fill = churn)) +
+    geom_boxplot(alpha = 0.7, outlier.colour = "red", outlier.size = 1) +
+    scale_fill_manual(values = c("No" = "#2ecc71", "Yes" = "#e74c3c")) +
+    labs(
+      title = paste(gsub("_", " ", tools::toTitleCase(col)), "by Churn"),
+      x = "Churned",
+      y = gsub("_", " ", tools::toTitleCase(col))
+    ) +
+    theme_minimal() +
+    theme(
+      legend.position = "none",
+      plot.title = element_text(face = "bold", size = 11),
+      axis.title = element_text(size = 10)
+    )
+})
+
+boxplot_grid <- wrap_plots(boxplot_list, ncol = 3) +
+  plot_annotation(
+    title = "Numeric Features by Churn Status",
+    theme = theme(plot.title = element_text(face = "bold", size = 14, hjust = 0.5))
+  )
+
+# --- 4.3 Categorical Variables by Churn Status ---
+cat_plot_list <- lapply(categorical_columns, function(col) {
+  ggplot(bank_raw, aes(x = .data[[col]], fill = churn)) +
+    geom_bar(position = "dodge", alpha = 0.8) +
+    geom_text(
+      stat = 'count',
+      aes(label = after_stat(count)),
+      position = position_dodge(width = 0.9),
+      vjust = -0.5,
+      size = 3
+    ) +
+    scale_fill_manual(values = c("No" = "#2ecc71", "Yes" = "#e74c3c")) +
+    labs(
+      title = paste("Churn by", gsub("_", " ", tools::toTitleCase(col))),
+      x = gsub("_", " ", tools::toTitleCase(col)),
+      y = "Count",
+      fill = "Churned"
+    ) +
+    theme_minimal() +
+    theme(
+      plot.title = element_text(face = "bold", size = 11),
+      axis.title = element_text(size = 10)
+    )
+})
+
+cat_grid <- wrap_plots(cat_plot_list, ncol = 2) +
+  plot_annotation(
+    title = "Categorical Features by Churn Status",
+    theme = theme(plot.title = element_text(face = "bold", size = 14, hjust = 0.5))
+  )
+
+# --- 4.4 Correlation Analysis ---
+correlation_matrix <- cor(bank_raw[numeric_columns], use = "pairwise.complete.obs")
+
+corr_plot <- ggcorrplot(
+  correlation_matrix,
+  method = "circle",
+  type = "lower",
+  lab = TRUE,
+  lab_size = 3,
+  title = "Correlation Matrix of Numeric Variables",
+  ggtheme = theme_minimal(),
+  colors = c("#e74c3c", "white", "#3498db")
+)
+
+# Save all EDA plots
+ggsave("plots/01_histogram_distributions.png", hist_grid, width = 12, height = 8, dpi = 300)
+ggsave("plots/02_boxplots_by_churn.png", boxplot_grid, width = 12, height = 8, dpi = 300)
+ggsave("plots/03_categorical_by_churn.png", cat_grid, width = 10, height = 6, dpi = 300)
+ggsave("plots/04_correlation_matrix.png", corr_plot, width = 8, height = 6, dpi = 300)
+
+message("✓ EDA visualizations saved to 'plots' folder.")
+
+
+# =============================================================================
+# 5. FEATURE ENGINEERING
+# =============================================================================
+
+message("\nApplying feature engineering...")
+
+# Log transformation of age (adding small constant to handle edge cases)
+# Note: This transformation can help normalize the age distribution
+bank_raw <- bank_raw %>%
+  mutate(age_log = log(age + 0.00123))
+
+# One-hot encoding for modeling
+# Remove intercept column to avoid multicollinearity
+y <- bank_raw$churn
+X <- model.matrix(~ . - churn - age, data = bank_raw)[, -1]  # Remove intercept
+
+# Combine into single dataframe
+bank_data <- as.data.frame(X)
+bank_data$churn <- y
+
+cat(sprintf("\n✓ Feature engineering complete. Final dataset: %d rows, %d features\n", 
+            nrow(bank_data), ncol(bank_data) - 1))
+
+
+# =============================================================================
+# 6. TRAIN/TEST SPLIT
+# =============================================================================
+
+message("\nSplitting data into train and test sets...")
+
+# 70/30 train/test split with stratification
+split_idx <- sample.split(bank_data$churn, SplitRatio = 0.70)
+train_data <- subset(bank_data, split_idx == TRUE)
+test_data <- subset(bank_data, split_idx == FALSE)
+
+cat(sprintf("Training set: %d samples (%.1f%%)\n", 
+            nrow(train_data), 
+            nrow(train_data)/nrow(bank_data) * 100))
+cat(sprintf("Test set: %d samples (%.1f%%)\n", 
+            nrow(test_data), 
+            nrow(test_data)/nrow(bank_data) * 100))
+
+# Update numeric columns to include engineered features
+numeric_columns <- c(numeric_columns[numeric_columns != "age"], "age_log")
+
+# Feature scaling (CRITICAL: fit on training data only to prevent data leakage)
+message("Scaling numeric features...")
+
+scaler_params <- preProcess(
+  train_data[, numeric_columns], 
+  method = c("center", "scale")
+)
+
+train_data[, numeric_columns] <- predict(scaler_params, train_data[, numeric_columns])
+test_data[, numeric_columns] <- predict(scaler_params, test_data[, numeric_columns])
+
+# Save scaler for future use
+saveRDS(scaler_params, "models/scaler_params.rds")
+message("✓ Scaler parameters saved for deployment.")
+
+
+# =============================================================================
+# 7. HANDLING CLASS IMBALANCE
+# =============================================================================
+
+message("\nAddressing class imbalance...")
+
+# --- 7.1 Class Weights for Weighted Logistic Regression ---
+n_total <- nrow(train_data)
+n_minority <- sum(train_data$churn == "Yes")
+n_majority <- sum(train_data$churn == "No")
+
+# Convert to numeric for weight calculation
+train_data_numeric <- train_data
+train_data_numeric$churn <- as.numeric(train_data$churn) - 1
+
+case_weights <- ifelse(
+  train_data_numeric$churn == 1,
+  n_total / (2 * n_minority),
+  n_total / (2 * n_majority)
+)
+
+cat(sprintf("Class weights - Majority: %.2f, Minority: %.2f\n",
+            n_total / (2 * n_majority),
+            n_total / (2 * n_minority)))
+
+# --- 7.2 SMOTE (Synthetic Minority Oversampling) ---
+message("Applying SMOTE...")
+
+smote_output <- SMOTE(
+  X = train_data_numeric %>% select(-churn),
+  target = train_data_numeric$churn,
+  K = 5,
+  dup_size = 0
+)
+
+train_smote <- smote_output$data %>%
+  rename(churn = class) %>%
+  mutate(churn = factor(churn, levels = c(0, 1), labels = c("No", "Yes")))
+
+cat(sprintf("✓ SMOTE applied - New training size: %d samples (balanced)\n", nrow(train_smote)))
+
+# --- 7.3 Random Downsampling ---
+message("Applying downsampling...")
+
+train_downsampled <- downSample(
+  x = train_data %>% select(-churn),
+  y = train_data$churn,
+  yname = "churn"
+)
+
+cat(sprintf("✓ Downsampling applied - New training size: %d samples (balanced)\n", 
+            nrow(train_downsampled)))
+
+
+# =============================================================================
+# 8. MODEL TRAINING
+# =============================================================================
+
+message("\nTraining logistic regression models...")
+
+# --- 8.1 Baseline Model (No class balancing) ---
+message("  - Training baseline model...")
+model_baseline <- glm(
+  churn ~ .,
+  data = train_data,
+  family = binomial(link = "logit")
+)
+
+# --- 8.2 Weighted Model ---
+message("  - Training weighted model...")
+model_weighted <- glm(
+  churn ~ .,
+  data = train_data,
+  family = quasibinomial(link = "logit"),
+  weights = case_weights
+)
+
+# --- 8.3 SMOTE Model ---
+message("  - Training SMOTE model...")
+model_smote <- glm(
+  churn ~ .,
+  data = train_smote,
+  family = binomial(link = "logit")
+)
+
+# --- 8.4 Downsampled Model ---
+message("  - Training downsampled model...")
+model_downsampled <- glm(
+  churn ~ .,
+  data = train_downsampled,
+  family = binomial(link = "logit")
+)
+
+# Save models
+saveRDS(model_baseline, "models/model_baseline.rds")
+saveRDS(model_weighted, "models/model_weighted.rds")
+saveRDS(model_smote, "models/model_smote.rds")
+saveRDS(model_downsampled, "models/model_downsampled.rds")
+
+message("✓ Models saved to 'models' folder.")
+
+
+# =============================================================================
+# 9. MODEL EVALUATION
+# =============================================================================
+
+message("\nEvaluating models...")
+
+# Custom evaluation function with AUC
+evaluate_model <- function(model, data, model_name, threshold = 0.5, set_name = "Test") {
+  
+  # Generate predictions
+  probs <- predict(model, newdata = data, type = "response")
+  preds <- factor(
+    ifelse(probs >= threshold, "Yes", "No"),
+    levels = c("No", "Yes")
+  )
+  
+  # Convert to numeric for confusion matrix (0, 1)
+  preds_numeric <- factor(
+    ifelse(probs >= threshold, 1, 0),
+    levels = c(0, 1)
+  )
+  churn_numeric <- factor(
+    as.numeric(data$churn) - 1,
+    levels = c(0, 1)
+  )
+  
+  # Confusion matrix
+  cm <- confusionMatrix(preds_numeric, churn_numeric, positive = "1")
+  
+  # AUC calculation (threshold-independent metric)
+  y_true_num <- as.numeric(as.character(churn_numeric))
+  roc_obj <- roc(y_true_num, probs, quiet = TRUE)
+  auc_score <- as.numeric(auc(roc_obj))
+  
+  # Extract metrics
+  tibble(
+    Model = model_name,
+    Set = set_name,
+    Threshold = threshold,
+    Accuracy = cm$overall["Accuracy"],
+    AUC = auc_score,
+    Sensitivity = cm$byClass["Sensitivity"],  # Recall / True Positive Rate
+    Specificity = cm$byClass["Specificity"],  # True Negative Rate
+    Precision = cm$byClass["Pos Pred Value"],
+    F1_Score = cm$byClass["F1"]
+  )
+}
+
+# --- 9.1 Training Set Performance ---
+message("Evaluating on training set...")
+
+results_train <- bind_rows(
+  evaluate_model(model_baseline, train_data, "Baseline", set_name = "Train"),
+  evaluate_model(model_weighted, train_data, "Weighted", set_name = "Train"),
+  evaluate_model(model_smote, train_smote, "SMOTE", set_name = "Train"),
+  evaluate_model(model_downsampled, train_downsampled, "Downsampled", set_name = "Train")
+)
+
+cat("\n")
+cat("=" , rep("=", 90), "\n", sep = "")
+cat("  TRAINING SET PERFORMANCE\n")
+cat("=" , rep("=", 90), "\n", sep = "")
+print(results_train, n = Inf)
+cat("=" , rep("=", 90), "\n", sep = "")
+
+# --- 9.2 Test Set Performance ---
+message("\nEvaluating on test set...")
+
+results_test <- bind_rows(
+  evaluate_model(model_baseline, test_data, "Baseline", set_name = "Test"),
+  evaluate_model(model_weighted, test_data, "Weighted", set_name = "Test"),
+  evaluate_model(model_smote, test_data, "SMOTE", set_name = "Test"),
+  evaluate_model(model_downsampled, test_data, "Downsampled", set_name = "Test")
+)
+
+cat("\n")
+cat("=" , rep("=", 90), "\n", sep = "")
+cat("  TEST SET PERFORMANCE (FINAL EVALUATION)\n")
+cat("=" , rep("=", 90), "\n", sep = "")
+print(results_test, n = Inf)
+cat("=" , rep("=", 90), "\n", sep = "")
+
+# --- 9.3 Combined Results ---
+results_combined <- bind_rows(results_train, results_test)
+
+# Save results
+write.csv(results_train, "results/model_comparison_train.csv", row.names = FALSE)
+write.csv(results_test, "results/model_comparison_test.csv", row.names = FALSE)
+write.csv(results_combined, "results/model_comparison_combined.csv", row.names = FALSE)
+
+message("\n✓ Results saved to 'results' folder.")
+
+# --- 9.4 Check for Overfitting ---
+cat("\n--- Overfitting Analysis ---\n")
+overfitting_check <- results_combined %>%
+  select(Model, Set, Accuracy, AUC, F1_Score) %>%
+  tidyr::pivot_wider(names_from = Set, values_from = c(Accuracy, AUC, F1_Score)) %>%
+  mutate(
+    Accuracy_Diff = Accuracy_Train - Accuracy_Test,
+    AUC_Diff = AUC_Train - AUC_Test,
+    F1_Diff = F1_Score_Train - F1_Score_Test
+  )
+
+print(overfitting_check)
+cat("\nNote: Large differences indicate potential overfitting.\n")
+
+# --- 9.5 Identify Best Model ---
+best_model_name <- results_test %>%
+  arrange(desc(F1_Score)) %>%
+  slice(1) %>%
+  pull(Model)
+
+best_f1 <- results_test %>%
+  arrange(desc(F1_Score)) %>%
+  slice(1) %>%
+  pull(F1_Score)
+
+best_auc <- results_test %>%
+  filter(Model == best_model_name) %>%
+  pull(AUC)
+
+message(sprintf("\n🏆 Best performing model: %s (F1: %.4f, AUC: %.4f)", 
+                best_model_name, best_f1, best_auc))
+
+
+# =============================================================================
+# 10. ROC CURVE VISUALIZATION
+# =============================================================================
+
+message("\nGenerating ROC curves...")
+
+# Generate predictions for all models
+pred_baseline <- predict(model_baseline, test_data, type = "response")
+pred_weighted <- predict(model_weighted, test_data, type = "response")
+pred_smote <- predict(model_smote, test_data, type = "response")
+pred_downsampled <- predict(model_downsampled, test_data, type = "response")
+
+# True labels (numeric)
+y_test <- as.numeric(test_data$churn) - 1
+
+# Calculate ROC objects
+roc_baseline <- roc(y_test, pred_baseline, quiet = TRUE)
+roc_weighted <- roc(y_test, pred_weighted, quiet = TRUE)
+roc_smote <- roc(y_test, pred_smote, quiet = TRUE)
+roc_downsampled <- roc(y_test, pred_downsampled, quiet = TRUE)
+
+# Plot ROC curves
+png("plots/05_roc_curves.png", width = 10, height = 8, units = "in", res = 300)
+plot(roc_baseline, col = "#e74c3c", lwd = 2, main = "ROC Curves - Model Comparison")
+plot(roc_weighted, col = "#3498db", lwd = 2, add = TRUE)
+plot(roc_smote, col = "#2ecc71", lwd = 2, add = TRUE)
+plot(roc_downsampled, col = "#f39c12", lwd = 2, add = TRUE)
+legend("bottomright", 
+       legend = c(
+         sprintf("Baseline (AUC = %.3f)", auc(roc_baseline)),
+         sprintf("Weighted (AUC = %.3f)", auc(roc_weighted)),
+         sprintf("SMOTE (AUC = %.3f)", auc(roc_smote)),
+         sprintf("Downsampled (AUC = %.3f)", auc(roc_downsampled))
+       ),
+       col = c("#e74c3c", "#3498db", "#2ecc71", "#f39c12"),
+       lwd = 2,
+       cex = 0.9)
+dev.off()
+
+message("✓ ROC curves saved to 'plots/05_roc_curves.png'")
+
+
+# =============================================================================
+# 11. FEATURE IMPORTANCE ANALYSIS
+# =============================================================================
+
+message("\nAnalyzing feature importance...")
+
+# Select best model
+best_model <- switch(
+  best_model_name,
+  "Baseline" = model_baseline,
+  "Weighted" = model_weighted,
+  "SMOTE" = model_smote,
+  "Downsampled" = model_downsampled
+)
+
+# Extract variable importance
+importance_df <- varImp(best_model) %>%
+  rownames_to_column("Feature") %>%
+  arrange(desc(Overall)) %>%
+  mutate(
+    Feature = gsub("_", " ", Feature),
+    Feature = tools::toTitleCase(Feature)
+  )
+
+# Plot top 15 features
+top_n <- 15
+feature_plot <- importance_df %>%
+  slice_max(Overall, n = top_n) %>%
+  ggplot(aes(x = reorder(Feature, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "steelblue", alpha = 0.8) +
+  coord_flip() +
+  labs(
+    title = sprintf("Top %d Drivers of Customer Churn (%s Model)", top_n, best_model_name),
+    x = "Feature",
+    y = "Importance Score",
+    caption = "Based on absolute coefficient values from logistic regression"
+  ) +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 13, hjust = 0.5),
+    axis.title = element_text(face = "bold", size = 11),
+    axis.text.y = element_text(size = 10)
+  )
+
+# Save plot and importance table
+ggsave("plots/06_feature_importance.png", feature_plot, width = 10, height = 8, dpi = 300)
+write.csv(importance_df, "results/feature_importance.csv", row.names = FALSE)
+
+message("✓ Feature importance analysis complete.")
+
+# Display model summary
+cat("\n--- Best Model Summary ---\n")
+print(summary(best_model))
+
+
+# =============================================================================
+# 12. FINAL OUTPUTS AND RECOMMENDATIONS
+# =============================================================================
+
+cat("\n")
+cat("=" , rep("=", 90), "\n", sep = "")
+cat("  PROJECT SUMMARY\n")
+cat("=" , rep("=", 90), "\n", sep = "")
+cat(sprintf("Dataset: %d customers, %d features\n", nrow(bank_data), ncol(bank_data) - 1))
+cat(sprintf("Churn rate: %.2f%%\n", churn_prop["Yes"]))
+cat(sprintf("Best model: %s (F1: %.4f, AUC: %.4f)\n", 
+            best_model_name, best_f1, best_auc))
+cat("\nTop 3 churn drivers:\n")
+print(head(importance_df %>% select(Feature, Overall), 3))
+cat("\nAll outputs saved to:\n")
+cat("  - plots/        : 6 visualization files\n")
+cat("  - models/       : 4 trained models + scaler\n")
+cat("  - results/      : Performance metrics and feature importance\n")
+cat("=" , rep("=", 90), "\n", sep = "")
+
+message("\n✅ Analysis complete! Check output folders for results.")

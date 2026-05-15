@@ -1,0 +1,191 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+
+# Q3
+```{r}
+# Data matrix
+X <- matrix(c(3, 10,
+              6, 12,
+              5, 14,
+              10, 9), ncol = 2, byrow = TRUE)
+X
+```
+
+```{r}
+# Sample mean vector
+xbar <- colMeans(X)
+xbar
+
+# Center the data
+X_centered <- X - matrix(xbar, nrow = nrow(X), ncol = ncol(X), byrow = TRUE)
+
+# MLE of covariance matrix
+Sigma_hat <- t(X_centered) %*% X_centered / nrow(X)
+Sigma_hat
+```
+
+
+# Q6
+```{r}
+Sigma <- matrix(c(2, -0.8*sqrt(2),
+                 -0.8*sqrt(2), 1), nrow=2)
+
+eigen(Sigma)
+```
+
+# Q8
+
+### a)
+
+```{r}
+# Sample data
+x <- c(-0.6, 3.1, 25.3, -16.8, -7.1, -6.2, 25.2, 22.6, 26.0)
+
+# Sort the sample
+x_sorted <- sort(x)
+
+# Sample size
+n <- length(x_sorted)
+
+p <- (1:n - 0.5) / n
+p
+
+# Theoretical normal quantiles
+q <- qnorm((1:n - 0.5)/n)
+q
+
+# Q-Q plot
+plot(q, x_sorted, main="Q-Q Plot",
+     xlab="Theoretical Normal Quantiles (q_i)",
+     ylab="Ordered Sample Data (x_(i))",
+     pch=19, col="blue")
+
+abline(lm(x_sorted ~ q), col="red",lwd =2)
+```
+
+
+# b
+
+```{r}
+# Data
+x <- c(-0.6, 3.1, 25.3, -16.8, -7.1, -6.2, 25.2, 22.6, 26.0)
+
+# sort data
+x_sorted <- sort(x)
+
+# mean of x
+x_bar <- mean(x_sorted)
+
+# theoretical quantiles
+n <- length(x_sorted)
+q <- qnorm((1:n - 0.5)/n)
+q
+
+# numerator
+numerator <- sum((x_sorted - x_bar) * q)
+
+numerator
+
+# sum of squares
+sum_sq <- sum((x_sorted - x_bar)^2)
+
+sum_sq
+
+# sum of squares of q
+sum_q_sq <- sum(q^2)
+
+sum_q_sq
+```
+
+
+```{r}
+
+# Step 1: Sort data
+x_sorted <- sort(x)
+
+# Step 2: Sample size
+n <- length(x_sorted)
+
+# Step 3: Compute probabilities
+p <- (1:n - 0.5) / n
+
+# Step 4: Get normal quantiles
+z <- qnorm(p)
+
+# Step 5: Correlation (r_Q)
+rQ <- cor(x_sorted, z)
+
+rQ
+```
+
+
+# Q9
+
+```{r}
+# Data: 10 largest companies
+X <- matrix(c(
+  108.28, 17.05, 1484.10,
+  152.36, 16.59, 750.33,
+  95.04,  10.91, 766.42,
+  65.45,  14.14, 1110.46,
+  62.97,   9.52, 1031.29,
+  263.99, 25.33, 195.26,
+  265.19, 18.54, 193.83,
+  285.06, 15.73, 191.11,
+  92.01,   8.10, 1175.16,
+  165.68, 11.13, 211.15
+), nrow = 10, byrow = TRUE)
+colnames(X) <- c("Sales", "Profits", "Assets")
+
+# Mean and covariance
+mu <- colMeans(X)
+S <- cov(X)
+
+# Squared distances
+D2 <- mahalanobis(X, center = mu, cov = S)
+D2_sorted <- sort(D2)
+D2_sorted   # ascending order for plotting
+
+chi_x <- c(0.3518, 0.7978, 1.2125, 1.6416, 2.1095, 2.6430, 3.2831, 4.1083, 5.3170, 7.8147)
+
+plot(chi_x, D2_sorted, pch=19,
+     xlab="Chi-square Quantiles",
+     ylab="Squared Distances",
+     main="Chi-square plot of the ordered distances")
+abline(0,1, col="red", lty=2)  
+```
+
+# Q10
+```{r}
+# Radiation data
+radiation <- c(
+  0.15, 0.09, 0.18, 0.10, 0.05, 0.12, 0.08, 0.05, 0.08, 0.10,
+  0.07, 0.02, 0.01, 0.10, 0.10, 0.10, 0.02, 0.10, 0.01, 0.40,
+  0.10, 0.05, 0.03, 0.05, 0.15, 0.10, 0.15, 0.09, 0.08, 0.18,
+  0.10, 0.20, 0.11, 0.30, 0.02, 0.20, 0.20, 0.30, 0.30, 0.40,
+  0.30, 0.05
+)
+
+log_radiation <- log(radiation)
+
+qqnorm(log_radiation, main="Q-Q Plot of ln(Radiation)")
+qqline(log_radiation, col="red")
+```
+
+```{r}
+# transformation with lambda = 0.25
+lambda <- 0.25
+bc_radiation <- (radiation^lambda - 1)/lambda
+
+qqnorm(bc_radiation, main="Q-Q Plot of Radiation (lambda = 1/4)")
+qqline(bc_radiation, col="blue")
+```
+
+```{r}
+shapiro.test(log_radiation)
+shapiro.test(bc_radiation)
+```
+

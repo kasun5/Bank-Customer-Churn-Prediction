@@ -1,0 +1,89 @@
+
+############################################################
+# Example 4.15 - Chi-Square Q-Q Plot for Multivariate Data
+############################################################
+
+# ---------------------------
+#Read the data
+# ---------------------------
+data1 <- read.table("ex_4_14.txt", header = TRUE)
+
+print(head(data1))
+
+# ---------------------------
+#Remove last column
+# ---------------------------
+data2 <- data1[, -5]
+print(head(data2))
+
+# ---------------------------
+#Compute covariance matrix
+# ---------------------------
+S <- cov(data2)
+
+cat("\nCovariance Matrix:\n")
+print(S)
+
+# ---------------------------
+#Compute mean vector
+# ---------------------------
+xb <- colMeans(data2)
+
+cat("\nMean Vector:\n")
+print(xb)
+
+# ---------------------------
+#Inverse of covariance matrix
+# ---------------------------
+IN_S <- solve(S)
+
+cat("\nInverse of Covariance Matrix:\n")
+print(IN_S)
+
+# ---------------------------
+#Sample size
+# ---------------------------
+n <- nrow(data2)
+
+cat("\nSample size (n):", n, "\n")
+
+# ---------------------------
+#Initialize vectors
+# ---------------------------
+q <- numeric(n)           # Quantiles
+d2 <- numeric(n)          # Mahalanobis distances squared
+chi_quant <- numeric(n)   # Chi-square quantiles
+
+# ---------------------------
+#Compute values
+# ---------------------------
+for (i in 1:n) {
+  
+  # Extract ith observation
+  y <- as.numeric(data2[i, ])
+  
+  # Compute q values
+  q[i] <- (i - 0.5) / n
+  
+  # Deviation vector
+  d <- y - xb
+  
+  # Mahalanobis distance squared
+  d2[i] <- t(d) %*% IN_S %*% d
+  
+}
+
+# ---------------------------
+#Standardize columns (z-scores)
+# ---------------------------
+z <- scale(data2)  # centers and scales by SD
+z_df <- as.data.frame(z)
+colnames(z_df) <- c("z1", "z2", "z3", "z4")
+# -----------------------------------------
+#Combine original, standardized, and d2
+# ---------------------------
+result <- cbind(data2, z_df, d2 = d2)
+
+print(result)
+
+############################################################

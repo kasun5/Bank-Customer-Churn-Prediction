@@ -1,0 +1,52 @@
+
+A<- matrix(c(-3, 3, -1, 2, 2, 4, 6, -3, 4), 3, 3, byrow=TRUE)
+B <- matrix(c(1,3,2,1,4,2),2,3, byrow=TRUE)
+D <- matrix(c(1,3,2,1,4,2),2,3, byrow=FALSE)
+
+S<-B+D
+DF<-B-D
+
+C<-matrix(c(2,-1,0,-1,3,-1,0,-1,2), 3,3, byrow=TRUE)
+ev<-eigen(C)
+
+#eigenvalues
+lamda<-ev$values
+
+#eigenvectors
+eigenvec<-ev$vectors
+
+#inverse
+INV_C1<-solve(C)
+P<-eigenvec
+
+#Check if P is orthogonal
+P%*%t(P)
+
+#Create matrix with eigenvalues in the diagonal
+L<-diag(lamda)
+
+options(scipen=999)
+
+#Spectral Decomposition
+C2<-P%*%L%*%t(P)
+round(C2,digits=2)
+
+
+#Square-root matrix
+sq_L<-diag(sqrt(lamda))
+sq_C<-P%*%sq_L%*%t(P)
+
+#Checking the square-root matrix
+C3<-sq_C%*%sq_C
+round(C3,digits = 2)
+
+# Example matrix
+mat <- matrix(c(1, 2, 3, 4, 5, 6, 2, 4, 6), nrow = 3, ncol = 3, byrow = TRUE)
+print("Original Matrix:")
+print(mat)
+
+install.packages("pracma")
+library(pracma)
+
+rref(mat)
+

@@ -1,0 +1,80 @@
+
+#Data matrix with three variables and 5 observayions
+X <- matrix(c(1,9,10,4, 12, 16, 2, 10, 12, 5, 8, 13, 3, 11, 14), 5, 3, byrow=TRUE)
+
+#Creating a nxn=5x5 identity matrix 
+I<-diag(5)
+
+#creating a nx1=5x1 matrix with ones
+l<-matrix(1,5,1)
+
+options(scipen = 999) ## Set option to suppress scientific notation
+
+#Calculating the variance covariance matrix
+S<-(1/(5-1))*t(X)%*%(I-(1/5)*l%*%t(l))%*%X
+round(S,digits = 3)
+
+#eigenvaules and eigenvectors
+eg<-eigen(S)
+
+#eigenvaules
+lamda<-round(eg$values, digits=3)
+
+#eigenvectors
+V<-round(eg$vectors, digits=4)
+
+#mean vector for the data
+xb<-colMeans(X)
+
+#eigenvector corresponding to egigenvalue 0
+#This comes as  a row vector here
+a<-V[,3]
+
+#Finding c
+c<-round(a%*%xb)
+
+
+###################Additional Example####################
+##############col1+col2+col3+col4=20#####################
+X <- matrix(c(
+  5, 5, 5, 5,
+  8, 4, 4, 4,
+  7, 6, 3, 4,
+  10, 5, 3, 2,
+  9, 1, 5, 5,
+  6, 8, 4, 2
+), nrow = 6, byrow = TRUE)
+
+n<-6
+#Creating a nxn=5x5 identity matrix 
+I<-diag(n)
+
+#creating a nx1=5x1 matrix with ones
+l<-matrix(1,n,1)
+
+options(scipen = 999) ## Set option to suppress scientific notation
+
+#Calculating the variance covariance matrix
+S<-(1/(n-1))*t(X)%*%(I-(1/n)*l%*%t(l))%*%X
+round(S,digits = 3)
+
+#eigenvaules and eigenvectors
+eg<-eigen(S)
+
+#eigenvaules
+lamda<-round(eg$values, digits=3)
+
+#eigenvectors
+V<-round(eg$vectors, digits=4)
+
+#mean vector for the data
+xb<-colMeans(X)
+
+#eigenvector corresponding to egigenvalue 0
+#This comes as  a row vector here
+a<-V[,4]
+
+#Finding c
+c<-round(a%*%xb)
+
+det(S)

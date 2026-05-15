@@ -1,0 +1,113 @@
+
+############################################################
+# Example 4.14 - Chi-Square Q-Q Plot for Multivariate Data
+############################################################
+
+# ---------------------------
+#Read the data
+# ---------------------------
+#data1 <- read.table("ex_4_14.txt", header = TRUE)
+data1 <- matrix(c(-3,15,4,16,5,11), 3, 2, byrow=TRUE)
+X <- matrix(c(3, 10, 6, 12, 5, 14, 10, 9), 4, 2, byrow=TRUE)
+
+print(head(data1))
+
+# ---------------------------
+#Remove last column
+# ---------------------------
+data2 <- data1[, -5]
+print(head(data2))
+
+# ---------------------------
+#Compute covariance matrix
+# ---------------------------
+S <- cov(data1)
+n<-4
+#Creating a nxn=5x5 identity matrix 
+I<-diag(n)
+
+#creating a nx1=5x1 matrix with ones
+l<-matrix(1,n,1)
+
+options(scipen = 999) ## Set option to suppress scientific notation
+
+#Calculating the variance covariance matrix
+S<-(1/(n))*t(X)%*%(I-(1/n)*l%*%t(l))%*%X
+cat("\nCovariance Matrix:\n")
+print(S)
+
+# ---------------------------
+#Compute mean vector
+# ---------------------------
+xb <- colMeans(data2)
+
+cat("\nMean Vector:\n")
+print(xb)
+
+# ---------------------------
+#Inverse of covariance matrix
+# ---------------------------
+IN_S <- solve(S)
+
+cat("\nInverse of Covariance Matrix:\n")
+print(IN_S)
+
+# ---------------------------
+#Sample size
+# ---------------------------
+n <- nrow(data2)
+
+cat("\nSample size (n):", n, "\n")
+
+# ---------------------------
+#Initialize vectors
+# ---------------------------
+q <- numeric(n)           # Quantiles
+d2 <- numeric(n)          # Mahalanobis distances squared
+chi_quant <- numeric(n)   # Chi-square quantiles
+
+# ---------------------------
+#Compute values
+# ---------------------------
+for (i in 1:n) {
+  
+  # Extract ith observation
+  y <- as.numeric(data2[i, ])
+  
+  # Compute q values
+  q[i] <- (i - 0.5) / n
+  
+  # Deviation vector
+  d <- y - xb
+  
+  # Mahalanobis distance squared
+  d2[i] <- t(d) %*% IN_S %*% d
+  
+  # Chi-square quantile (df = number of variables = 4)
+  chi_quant[i] <- qchisq(q[i], df = 4)
+}
+
+# ---------------------------
+#Sort distances
+# ---------------------------
+s_d2 <- sort(d2)
+
+#----------------------------
+# Result table
+result <- data2
+result$q <- q
+result$d2 <- d2
+result$chi_quant <- chi_quant
+print(result)
+# ---------------------------
+
+#Plot
+# ---------------------------
+plot(chi_quant, s_d2,
+     xlab = "Chi-square Quantiles",
+     ylab = "Distance Squared",
+     main = "Example 4.14 - Chi-square Q-Q Plot",
+     col = "black",
+     pch = 19)
+
+############################################################

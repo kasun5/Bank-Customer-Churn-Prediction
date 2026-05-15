@@ -1,0 +1,436 @@
+
+############################################################
+# Bank Customer Churn Prediction
+# End-to-End Data Science Project
+# Description:
+# This script demonstrates a data science workflow
+# for predicting customer churn using logistic regression in R.
+############################################################
+
+
+############################
+# 1. SETUP & LIBRARIES
+############################
+library(dplyr)
+library(ggplot2)
+library(patchwork)
+library(here)
+library(caret)
+library(caTools)
+library(smotefamily)
+library(ggcorrplot)
+library(tibble)
+library(pROC)
+
+set.seed(123)
+
+############################
+# 2. DATA LOADING & CLEANING
+############################
+
+#read data
+bank_raw <- read.csv(here("data", "Bank_Customer_Churn_Data.csv"), stringsAsFactors = FALSE)
+
+# quick check for correct data types and column names
+str(bank_raw)
+
+# remove customer_id column 
+bank_raw <- bank_raw %>% select(-customer_id)
+
+# Convert target to factor for classification
+bank_raw$churn <- as.factor(bank_raw$churn)
+# Convert products_number, credit_card, active_member to factors
+bank_raw <- bank_raw %>%
+  mutate(across(c(products_number, credit_card, active_member), as.factor))
+
+
+# Check total missing values per column
+colSums(is.na(bank_raw))
+# summary of the data
+summary(bank_raw)
+
+# Separate numerical and categorical features
+numeric_columns <- bank_raw %>%
+  select(where(is.numeric)) %>%
+  colnames()
+
+categorical_columns <- bank_raw %>%
+  select(where(~ is.factor(.x) | is.character(.x))) %>%
+  colnames()
+
+
+####################################
+# 3. EXPLORATORY DATA ANALYSIS (EDA)
+####################################
+
+# Generate a list of histogram plots
+hist_list <- lapply(numeric_columns, function(col) {
+  ggplot(bank_raw, aes(x = .data[[col]])) +  # Use .data[[col]] to dynamically reference column names
+    geom_histogram(fill = "steelblue", color = "white", bins = 30) +
+    labs(title = paste("Distribution of", col), x = col, y = "Frequency") +
+    theme_minimal()
+})
+# Display all histograms in a grid
+hist_grid <- wrap_plots(hist_list, ncol = 2)
+print(hist_grid)
+
+
+# Generate a list of boxplots
+boxplot_list <- lapply(numeric_columns, function(col) {
+  ggplot(bank_raw, aes(x = churn, y = .data[[col]], fill = churn)) +
+    geom_boxplot(alpha = 0.7, outlier.colour = "red", outlier.shape = 1) +
+    labs(title = paste(col, "by Churn"), 
+         x = "Churn Status", 
+         y = col) +
+    theme_minimal() +
+    theme(legend.position = "none") # Hide legend for individual plots to save space
+})
+
+# Display all boxplots in a grid
+boxplot_grid <- wrap_plots(boxplot_list, ncol = 3)
+print(boxplot_grid)
+
+
+# Generate a list of bar charts by churn status
+cat_plot_list <- lapply(categorical_columns, function(col) {
+  ggplot(bank_raw, aes(x = .data[[col]], fill = churn)) +
+    geom_bar(position = "dodge") +
+    # Use after_stat(count) instead of ..count..
+    geom_text(stat = 'count', 
+              aes(label = after_stat(count)), 
+              position = position_dodge(width = 0.9), 
+              vjust = -0.5, 
+              size = 3) +
+    labs(title = paste("Churn by", col), x = col, y = "Count") +
+    theme_minimal()
+})
+
+# Display all categorical plots in a grid
+cat_grid <- wrap_plots(cat_plot_list, ncol = 2)
+print(cat_grid)
+
+
+#  Check for correlation between predictor variable
+# Calculate correlation matrix
+correlation_matrix <- cor(bank_raw[numeric_columns], use = "pairwise.complete.obs")
+
+# Visualize correlation matrix with a heat map
+corr_plot <- ggcorrplot(correlation_matrix, 
+           method = "circle", 
+           type = "lower", 
+           lab = TRUE, 
+           title = "Correlation Matrix of Numeric Variables")
+print(corr_plot)
+
+# Save EDA to folder
+ggsave("plots/histogram_plots.png", hist_grid)
+ggsave("plots/boxplots.png", boxplot_grid)
+ggsave("plots/bar_charts.png", cat_grid)
+ggsave("plots/correlation_matrix.png", corr_plot)
+
+
+############################
+# 4. FEATURE ENGINEERING
+############################
+
+# Log Transformation of Age
+bank_raw <- bank_raw %>%
+  mutate(age = log(age)+0.00123)
+
+# One-Hot Encoding
+# Using '-1' to get a column for every category level
+y <- factor(bank_raw$churn)
+X <- model.matrix(~ . - churn, data = bank_raw)
+
+bank_data <- as.data.frame(X)
+bank_data$churn <- y
+
+
+############################
+# 5. TRAIN / TEST SPLIT
+############################
+
+
+# Split the data into training and testing sets
+split <- sample.split(bank_data$churn, SplitRatio = 0.70)
+train_data <- subset(bank_data, split == TRUE)
+test_data <- subset(bank_data, split == FALSE)
+
+
+# Scale numeric columns (Fit on train ONLY to avoid leakage)
+scaler_params <- preProcess(train_data[, numeric_columns], method = c("center", "scale"))
+
+# Apply the transformation to both dataset
+train_data[, numeric_columns] <- predict(scaler_params, train_data[, numeric_columns])
+test_data[, numeric_columns] <- predict(scaler_params, test_data[, numeric_columns])
+
+# Verify results
+summary(train_data[, numeric_columns])
+
+
+############################
+# 6. HANDLING CLASS IMBALANCE
+############################
+
+# Weights for Weighted Logistic
+w_total <- nrow(train_data)
+w_min <- sum(train_data$churn == 1)
+w_maj <- sum(train_data$churn == 0)
+case_weights <- ifelse(train_data$churn == 1, 
+                                  w_total / (2 * w_min), 
+                                  w_total / (2 * w_maj))
+
+
+
+
+# Prepare Data for SMOTE
+smote_output <- SMOTE(X = as.data.frame(train_data %>% select(-churn)), 
+                      target = train_data$churn, K = 5, dup_size = 0)
+train_smote <- smote_output$data %>% rename(churn = class) %>% 
+                      mutate(churn = as.factor(churn))
+
+
+
+# Downsampling
+down_train <- downSample(x = train_data %>% select(-churn),
+                         y = train_data$churn,
+                         yname = "churn")
+
+
+############################
+# 7. MODELING & EVALUATION
+############################
+
+# Evaluation Function
+evaluate_model <- function(probs, y_true, threshold = 0.5, model_name) {
+  
+  preds <- factor(ifelse(probs >= threshold, 1, 0), levels = c(0, 1))
+  y_true_fact <- factor(y_true, levels = c(0, 1))
+  cm <- confusionMatrix(preds, y_true_fact, positive = "1")
+  
+  # 2. AUC Calculation (Threshold-independent)
+  y_true_num <- as.numeric(as.character(y_true))
+  roc_obj <- roc(y_true_num, probs, quiet = TRUE)
+  auc_score <- as.numeric(auc(roc_obj))
+  
+  tibble(
+    Model = model_name,
+    Accuracy = cm$overall["Accuracy"],
+    AUC = auc_score,
+    #Balanced_Accuracy = cm$byClass["Balanced Accuracy"],
+    Recall = cm$byClass["Sensitivity"],
+    Precision = cm$byClass["Pos Pred Value"],
+    F1 = cm$byClass["F1"]
+  )
+}
+
+
+# Fitting Models
+base_fit <- glm(churn ~ ., data = train_data, family = binomial)
+weight_fit <- glm(churn ~ ., data = train_data, family = quasibinomial, weights = case_weights)
+smote_fit <- glm(churn ~ ., data = train_smote, family = binomial)
+down_fit <- glm(churn ~ ., data = down_train, family = binomial)
+
+
+# Generating probability vectors for train
+probs_base_train   <- predict(base_fit,   train_data, type = "response")
+probs_weight_train <- predict(weight_fit, train_data, type = "response")
+probs_smote_train  <- predict(smote_fit,  train_smote, type = "response")
+probs_down_train  <- predict(down_fit,   down_train, type = "response")
+
+
+# Generating probability vectors for test
+probs_base   <- predict(base_fit,   test_data, type = "response")
+probs_weight <- predict(weight_fit, test_data, type = "response")
+probs_smote  <- predict(smote_fit,  test_data, type = "response")
+probs_down   <- predict(down_fit,   test_data, type = "response")
+
+
+# Aggregating Results for train
+results_train <- bind_rows(
+  evaluate_model(probs_base_train,   train_data$churn, threshold = 0.5, "Baseline"),
+  evaluate_model(probs_weight_train, train_data$churn, threshold = 0.5, "Weighted"),
+  evaluate_model(probs_smote_train,  train_smote$churn, threshold = 0.5, "SMOTE"),
+  evaluate_model(probs_down_train,   down_train$churn, threshold = 0.5, "Downsampled")
+)
+
+# --- E. Final Inspection ---
+print("--- Training Performance ---")
+print(results_train)
+
+
+# Aggregating Results for test
+results <- bind_rows(
+  evaluate_model(probs_base,   test_data$churn, threshold = 0.5, "Baseline"),
+  evaluate_model(probs_weight, test_data$churn, threshold = 0.5, "Weighted"),
+  evaluate_model(probs_smote,  test_data$churn, threshold = 0.5, "SMOTE"),
+  evaluate_model(probs_down,   test_data$churn, threshold = 0.5, "Downsampled")
+)
+
+# --- E. Final Inspection ---
+print("--- Final Model Comparison ---")
+print(results)
+
+
+############################
+# 7. VARIABLE IMPORTANCE
+############################
+# Assuming SMOTE or Weighted is the winner based on F1
+best_model <- smote_fit
+
+
+# Extract importance
+importance <- as.data.frame(varImp(best_model))
+importance$Feature <- rownames(importance)
+
+# Plot
+feature_importance <- ggplot(importance, aes(x = reorder(Feature, Overall), y = Overall)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Key Drivers of Customer Churn", x = "Features", y = "Importance Score") +
+  theme_minimal()
+
+ggsave("plots/feature_importance.png", feature_importance)
+
+# Significant Values Check
+summary(weight_fit)
+
+
+############################
+# 8. FINAL MODEL (WEIGHTED LOGISTIC)
+############################
+
+final_model <- glm(
+  churn ~ .,
+  data = train_data,
+  family = binomial,
+  weights = case_weights
+)
+############################
+# 9. CV-BASED THRESHOLD OPTIMIZATION
+############################
+
+library(caret)
+
+set.seed(123)
+folds <- createFolds(train_data$churn, k = 5)
+
+threshold_grid <- seq(0.05, 0.95, by = 0.01)
+
+cv_profit_results <- sapply(threshold_grid, function(t) {
+  
+  fold_profits <- sapply(folds, function(idx) {
+    
+    cv_train <- train_data[-idx, ]
+    cv_valid <- train_data[idx, ]
+    
+    # Recompute weights for fold
+    w_total <- nrow(cv_train)
+    w_min <- sum(cv_train$churn == 1)
+    w_maj <- sum(cv_train$churn == 0)
+    
+    fold_weights <- ifelse(cv_train$churn == 1,
+                           w_total/(2*w_min),
+                           w_total/(2*w_maj))
+    
+    fold_model <- glm(
+      churn ~ .,
+      data = cv_train,
+      family = binomial,
+      weights = fold_weights
+    )
+    
+    probs <- predict(fold_model, cv_valid, type = "response")
+    preds <- ifelse(probs >= t, 1, 0)
+    
+    cm <- table(preds, cv_valid$churn)
+    
+    # ---- PROFIT MATRIX (Adjust as needed) ----
+    profit_tp <- 100
+    cost_fp   <- -10
+    cost_fn   <- -200
+    profit_tn <- 0
+    
+    tp <- ifelse("1" %in% rownames(cm) & "1" %in% colnames(cm), cm["1","1"], 0)
+    fp <- ifelse("1" %in% rownames(cm) & "0" %in% colnames(cm), cm["1","0"], 0)
+    fn <- ifelse("0" %in% rownames(cm) & "1" %in% colnames(cm), cm["0","1"], 0)
+    tn <- ifelse("0" %in% rownames(cm) & "0" %in% colnames(cm), cm["0","0"], 0)
+    
+    tp*profit_tp + fp*cost_fp + fn*cost_fn + tn*profit_tn
+  })
+  
+  mean(fold_profits)
+})
+
+best_threshold <- threshold_grid[which.max(cv_profit_results)]
+best_threshold
+
+############################
+# 10. FINAL TEST EVALUATION
+############################
+
+test_probs <- predict(final_model, test_data, type = "response")
+
+final_preds <- factor(
+  ifelse(test_probs >= best_threshold, 1, 0),
+  levels = c(0,1)
+)
+
+final_cm <- confusionMatrix(final_preds, test_data$churn, positive = "1")
+
+final_cm
+#####
+library(pROC)
+
+roc_obj <- roc(test_data$churn, test_probs)
+auc_value <- auc(roc_obj)
+
+plot(roc_obj, col = "blue", main = "ROC Curve - Weighted Logistic")
+auc_value
+
+####
+profit_values <- sapply(threshold_grid, function(t) {
+  
+  preds <- ifelse(test_probs >= t, 1, 0)
+  cm <- table(preds, test_data$churn)
+  
+  profit_tp <- 100
+  cost_fp   <- -10
+  cost_fn   <- -200
+  profit_tn <- 0
+  
+  tp <- ifelse("1" %in% rownames(cm) & "1" %in% colnames(cm), cm["1","1"], 0)
+  fp <- ifelse("1" %in% rownames(cm) & "0" %in% colnames(cm), cm["1","0"], 0)
+  fn <- ifelse("0" %in% rownames(cm) & "1" %in% colnames(cm), cm["0","1"], 0)
+  tn <- ifelse("0" %in% rownames(cm) & "0" %in% colnames(cm), cm["0","0"], 0)
+  
+  tp*profit_tp + fp*cost_fp + fn*cost_fn + tn*profit_tn
+})
+
+plot(threshold_grid, profit_values,
+     type = "l",
+     col = "darkgreen",
+     lwd = 2,
+     xlab = "Threshold",
+     ylab = "Profit",
+     main = "Profit Curve - Weighted Logistic")
+
+abline(v = best_threshold, col = "red", lty = 2)
+
+
+
+cal_obj <- calibration(
+  test_data$churn ~ probs_smote,
+  class = "1",
+  cuts = 10
+)
+
+plot(cal_obj)
+
+
+
+
+library(car)
+
+vif_values <- vif(weight_fit)
+vif_values

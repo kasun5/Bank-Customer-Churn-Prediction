@@ -1,0 +1,4 @@
+"0","# Reading data"
+"0","data1 <- read.table(""ex_5_2.txt"", header = TRUE)"
+"0","# R built-in Q-Q plot"
+"0","qqnorm(data1$X1, main = ""Normal Q-Q Plot_Sweat rate"")"

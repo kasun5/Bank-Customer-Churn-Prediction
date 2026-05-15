@@ -1,0 +1,88 @@
+#---------------------------------------------
+# Hotelling's T^2 / Squared Mahalanobis Distance Charts
+#---------------------------------------------
+
+# Reading data
+data1 <- read.table("table5-8.txt", header = TRUE)
+data1 <- as.data.frame(data1)
+
+#---------------------------------------------
+# T^2 Chart for X1 and X2
+#---------------------------------------------
+
+data2 <- data1[, 1:2]  # Select X1 and X2
+
+# Covariance matrix
+S <- cov(data2)
+
+# Mean vector
+xb <- colMeans(data2)
+
+# Inverse of S
+S_inv <- solve(S)
+
+# Number of observations and vector size
+n <- nrow(data2)
+p <- ncol(data2)
+
+# Calculate squared Mahalanobis distances
+d2 <- numeric(n)
+for (i in 1:n) {
+  y <- t(as.matrix(data2[i, ]))
+  d2[i] <- t(y - xb) %*% S_inv %*% (y - xb)
+}
+
+# Display distances
+d2
+
+# Plot T^2 chart for X1 and X2
+plot(d2,
+     ylim = c(0, 14),
+     main = "T^2 Chart for X1 and X2",
+     xlab = "Observation",
+     ylab = "Squared Mahalanobis Distance")
+
+# Chi-square limit at 99% confidence
+chq1 <- qchisq(0.99, df = p)
+abline(h = chq1, col = "blue")
+
+#---------------------------------------------
+# T^2 Chart for All Columns
+#---------------------------------------------
+
+# Covariance matrix for all variables
+S <- cov(data1)
+
+# Mean vector
+xb <- colMeans(data1)
+
+# Inverse of S
+S_inv <- solve(S)
+
+# Number of observations and vector size
+n <- nrow(data1)
+p <- ncol(data1)
+
+# Calculate squared Mahalanobis distances
+d2 <- numeric(n)
+for (i in 1:n) {
+  y <- t(as.matrix(data1[i, ]))
+  d2[i] <- t(y - xb) %*% S_inv %*% (y - xb)
+}
+
+# Display distances
+d2
+
+# Plot T^2 chart for all variables
+plot(d2,
+     ylim = c(0, 16),
+     main = "T^2 Chart for All Variables",
+     xlab = "Observation",
+     ylab = "Squared Mahalanobis Distance")
+
+# Chi-square limits at 95% and 99% confidence
+chq1 <- qchisq(0.95, df = p)
+chq2 <- qchisq(0.99, df = p)
+
+abline(h = chq1, col = "blue")
+abline(h = chq2, col = "red")
