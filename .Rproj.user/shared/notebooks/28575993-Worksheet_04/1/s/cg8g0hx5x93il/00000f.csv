@@ -1,6 +1,0 @@
-"0","# ---------------------------"
-"0","# Correlation between X_j and normal quantiles"
-"0","# ---------------------------"
-"0","rQ <- cor(data1, normal_quant)"
-"2","Error in cor(data1, normal_quant) : incompatible dimensions
-"

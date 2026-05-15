@@ -1,5 +1,0 @@
-"0","# transformation with lambda = 0.25"
-"0","lambda <- 0.25"
-"0","bc_radiation <- (radiation^lambda - 1)/lambda"
-"0",""
-"0","qqnorm(bc_radiation, main=""Q-Q Plot of Radiation (lambda = 1/4)"")"
