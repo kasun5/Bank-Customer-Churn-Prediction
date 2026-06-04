@@ -121,7 +121,7 @@ source("churn_prediction.R")
 
 ---
 
-## 📁 **Project Structure**
+## **Project Structure**
 
 ```
 Bank-Customer-Churn-Prediction/
