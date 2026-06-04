@@ -1,7 +1,6 @@
-# Bank Customer Churn Prediction 🏦
+# Bank Customer Churn Prediction
 
 [![R Version](https://img.shields.io/badge/R-%3E%3D%204.0.0-blue.svg)](https://www.r-project.org/)
-[![License](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
 > **Predicting customer churn with 84.4% AUC using advanced ML techniques in R**
 
@@ -9,7 +8,7 @@ An end-to-end machine learning project demonstrating production-ready code, prop
 
 ---
 
-## 🎯 **Project Impact & Key Results**
+## **Project Impact & Key Results**
 
 **Business Problem**: Banks lose 15-25% of customers annually, costing millions in lost revenue. Early churn prediction enables proactive retention.
 
@@ -23,11 +22,11 @@ An end-to-end machine learning project demonstrating production-ready code, prop
 
 ---
 
-## 📊 **Results at a Glance**
+## **Results at a Glance**
 
 ### Model Performance (Test Set)
 
-| Model | AUC ⭐ | F1 Score | Recall | Precision | Accuracy |
+| Model | AUC  | F1 Score | Recall | Precision | Accuracy |
 |-------|--------|----------|--------|-----------|----------|
 | Baseline | 0.843 | 0.529 | 0.416 | 0.726 | 0.849 |
 | Weighted | 0.844 | 0.566 | 0.766 | 0.449 | 0.761 |
@@ -64,7 +63,7 @@ An end-to-end machine learning project demonstrating production-ready code, prop
 
 ---
 
-## 💼 **Business Value & Recommendations**
+## **Business Value & Recommendations**
 
 ### Quantified Impact
 - **Cost Savings**: Retention campaigns targeting 700 high-risk customers identified by model could save **$35,000+** annually (assuming $50 per campaign, 10% success rate, $1000 customer lifetime value)
@@ -100,7 +99,7 @@ An end-to-end machine learning project demonstrating production-ready code, prop
 
 ---
 
-## 🚀 **Quick Start**
+## **Quick Start**
 
 ```bash
 # Clone and run
@@ -150,7 +149,7 @@ Bank-Customer-Churn-Prediction/
 
 ---
 
-## 🎓 **Skills Demonstrated**
+## **Skills Demonstrated**
 
 | Category | Skills |
 |----------|--------|
@@ -163,7 +162,7 @@ Bank-Customer-Churn-Prediction/
 
 ---
 
-## 📈 **Methodology Overview**
+## **Methodology Overview**
 
 <details>
 <summary><b>Click to expand full technical details</b></summary>
@@ -223,7 +222,7 @@ Tested four approaches:
 
 ---
 
-## 📚 **Dataset**
+## **Dataset**
 
 - **Source**: [Kaggle Bank Customer Churn Dataset](https://www.kaggle.com/datasets/shantanudhakadd/bank-customer-churn-prediction)
 - **Size**: 10,000 customers, 12 features
@@ -235,24 +234,3 @@ Tested four approaches:
   - **Credit**: Credit score
 - **Time Period**: Cross-sectional snapshot
 
----
-
-## 📧 **Let's Connect**
-
-**Kasun**  
-📧 Email: mra045@shsu.edu  
-💼 LinkedIn: [k-abeyratne](https://www.linkedin.com/in/k-abeyratne/)  
-🐙 GitHub: [@kasun5](https://github.com/kasun5)  
-
-**Open to**: Data Scientist, ML Engineer, Data Analyst roles  
-**Availability**: Immediate
-
----
-
-## 📝 **License**
-
-MIT License - See [LICENSE](LICENSE) for details
-
----
-
-**⭐ Star this repo if you found it helpful!**
