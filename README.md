@@ -1,7 +1,5 @@
 # Bank Customer Churn Prediction
 
-[![R Version](https://img.shields.io/badge/R-%3E%3D%204.0.0-blue.svg)](https://www.r-project.org/)
-
 > **Predicting customer churn with 84.4% AUC using advanced ML techniques in R**
 
 An end-to-end machine learning project demonstrating production-ready code, proper validation techniques, and business-driven insights for reducing customer churn in banking.
