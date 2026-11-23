@@ -11,10 +11,10 @@ An end-to-end machine learning project demonstrating production-ready code, prop
 **Business Problem**: Banks lose 15-25% of customers annually, costing millions in lost revenue. Early churn prediction enables proactive retention.
 
 **Solution**: 
-- ✅ Built predictive model analyzing 10,000+ customers achieving **84.4% AUC**
-- ✅ Identified **top 3 churn drivers** to inform targeted retention strategies  
-- ✅ Improved recall by **68%** over baseline (0.416 → 0.700) using SMOTE
-- ✅ Deployed production-ready pipeline with proper validation (no data leakage)
+-  Built predictive model analyzing 10,000+ customers achieving **84.4% AUC**
+-  Identified **top 3 churn drivers** to inform targeted retention strategies  
+-  Improved recall by **68%** over baseline (0.416 → 0.700) using SMOTE
+-  Deployed production-ready pipeline with proper validation
 
 **Technologies**: R • Logistic Regression • SMOTE • ROC-AUC Analysis • Data Visualization
 
